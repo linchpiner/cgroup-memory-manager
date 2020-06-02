@@ -28,11 +28,76 @@ Set environment variable `RUST_LOG=info` to see what cgroups are detected and re
 
 # Running as a process on host
 
-TODO
+Assuming you want to run `cgroup-memory-manager` on a Kubernetes node, you can use the following
+systemd unit file:
+
+
+```
+[Unit]
+Description=cgroup-memory-manager
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cgroup-memory-manager \
+    --parent /sys/fs/cgroup/memory/kubepods \
+    --threshold 25%
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
 
 # Running as DaemonSet in Kubernetes
 
-TODO
+Example of DaemonSet manifest for cgroup-memory-manager that mounts `/sys/fs/cgroup` from the host
+to a container:
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: cgroup-memory-manager
+  namespace: kube-system
+spec:
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: cgroup-memory-manager
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
+  template:
+    metadata:
+      labels:
+        app: cgroup-memory-manager
+    spec:
+      containers:
+        - name: cgroup-memory-manager
+          image: linchpiner/cgroup-memory-manager
+          imagePullPolicy: IfNotPresent
+          command:
+            - cgroup-memory-manager
+            - --parent=/host/sys/fs/cgroup/memory/kubepods
+            - --threshold=25%
+          env:
+            - name: RUST_LOG
+              value: info
+          resources:
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          volumeMounts:
+            - mountPath: /host/sys/fs/cgroup
+              name: sysfs
+      restartPolicy: Always
+      volumes:
+        - hostPath:
+            path: /sys/fs/cgroup
+            type: ""
+          name: sysfs
+```
 
 # Details
 
@@ -42,29 +107,18 @@ example:
 ```
 /sys/fs/cgroup/memory/kubepods/
 ├── podA
-│   ├── containerA1
-│   └── containerA2
-├── podB
-│   ├── containerB1
-│   └── containerB2
+│   └── containerA1
 ├── burstable
-│   ├── podC
-│   │   ├── containerC1
-│   │   └── containerC2
-│   └── podD
-│       ├── containerD1
-│       └── containerD2
+│   └── podB
+│       └── containerB1
 └── besteffort
-    ├── podE
-    │   ├── containerE1
-    │   └── containerE2
-    └── podF
-        ├── containerF1
-        └── containerF2
+    └── podC
+        └── containerC1
 ```
 
 While it is possible to monitor memory consumption for the parent cgroups that correspond to Pods or
 QoS classes, `cgroup-memory-manager` does this only for cgroups that correspond to containers.
+For Kubernetes, set `--parent` to `/sys/fs/cgroup/memory/kubepods`.
 
 Only the cgroup memory resource controller v1 is supported, see
-https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt for the details.
+https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt.
