@@ -3,7 +3,7 @@
 This program periodically scans all the child cgroups of the specified parent cgroup and analyzes
 memory consumption using control file `memory.stat` of the cgroup memory resource controller.
 When cgroup cache usage is higher than the specified threshold, it triggers a forced page reclaim
-via control file `memory.force_empty`, but not more often than once in the specified time frmae.
+via control file `memory.force_empty`, but not more often than once in the specified time frame.
 
 # Why do you need it?
 
